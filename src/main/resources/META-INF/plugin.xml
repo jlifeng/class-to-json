@@ -1,18 +1,25 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>com.github.jlifeng.classtojson</id>
-    <name>class-to-json</name>
-    <vendor>jlifeng</vendor>
+    <name>Java Generate Json Schema</name>
+    <vendor>jianglifeng</vendor>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.java</depends>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
+    <actions>
+        <!-- 定义 Action -->
+        <action
+                id="GenerateJsonSchemaAction"
+                class="com.github.jlifeng.classtojson.actions.GenerateJsonSchemaAction"
+                text="Generate JSON Schema"
+                description="Convert selected Java classes to JSON Schema">
+            <add-to-group group-id="ProjectViewPopupMenu" />
+        </action>
+    </actions>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.jlifeng.classtojson.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
+        <notificationGroup id="GenerateJsonSchema"
+                           displayType="BALLOON"/>
     </extensions>
-
-    <applicationListeners>
-        <listener class="com.github.jlifeng.classtojson.listeners.MyApplicationActivationListener" topic="com.intellij.openapi.application.ApplicationActivationListener"/>
-    </applicationListeners>
 </idea-plugin>

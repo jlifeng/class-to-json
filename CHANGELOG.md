@@ -1,7 +1,14 @@
 <!-- Keep a Changelog guide -> https://keepachangelog.com -->
 
-# class-to-json Changelog
+# Java Generate Json Schema Changelog
 
-## [Unreleased]
+
+## [0.0.1] - 2025-03-22
+
 ### Added
-- Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template)
+
+- 将选中的多个 Java 类转换为 JSON Schema 的 JSON 文件
+- 输出文件路径在项目根目录的 .json文件中，一个类对应一个文件
+
+
+github: https://github.com/jlifeng/class-to-json
