@@ -2,6 +2,7 @@ package com.github.jlifeng.classtojson.actions;
 
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.notification.Notification;
@@ -97,6 +98,18 @@ public class GenerateJsonSchemaAction extends AnAction {
         schema.fluentPut("type", "object")
                 .fluentPut("title", psiClass.getName());
 
+        if (psiClass.isEnum()) {
+            schema.fluentPut("type", "string");
+            JSONArray enumValues = new JSONArray();
+            for (PsiField field : psiClass.getFields()) {
+                if (field instanceof PsiEnumConstant) {
+                    enumValues.add(field.getName());
+                }
+            }
+            schema.fluentPut("enum", enumValues);
+            return schema;
+        }
+
         JSONObject properties = new JSONObject();
         for (PsiField field : psiClass.getFields()) {
             PsiType fieldType = field.getType();
@@ -121,6 +134,59 @@ public class GenerateJsonSchemaAction extends AnAction {
                 propSchema.fluentPut("type", getJsonType(fieldType));
             }
 
+            // 处理 List 类型
+            if (fieldType instanceof PsiClassType) {
+                PsiClassType classType = (PsiClassType) fieldType;
+                PsiClass psiClassType = classType.resolve();
+                if (psiClassType != null && "java.util.List".equals(psiClassType.getQualifiedName())) {
+                    PsiType[] parameters = classType.getParameters();
+                    if (parameters.length > 0) {
+                        PsiType parameterType = parameters[0];
+                        if (parameterType instanceof PsiClassType) {
+                            PsiClassType paramClassType = (PsiClassType) parameterType;
+                            PsiClass paramClass = paramClassType.resolve();
+                            if (paramClass != null && !isJavaLangType(paramClass)) {
+                                propSchema.fluentPut("type", "array")
+                                        .fluentPut("items", convertClassToJsonSchema(paramClass, processed, project));
+                            } else {
+                                propSchema.fluentPut("type", "array")
+                                        .fluentPut("items", processType(parameterType, processed, project));
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 处理 Map 类型
+            if (fieldType instanceof PsiClassType) {
+                PsiClassType classType = (PsiClassType) fieldType;
+                PsiClass psiClassType = classType.resolve();
+                if (psiClassType != null && "java.util.Map".equals(psiClassType.getQualifiedName())) {
+                    PsiType[] parameters = classType.getParameters();
+                    if (parameters.length == 2) {
+                        PsiType keyType = parameters[0];
+                        PsiType valueType = parameters[1];
+                        if (keyType instanceof PsiClassType && valueType instanceof PsiClassType) {
+                            PsiClassType keyClassType = (PsiClassType) keyType;
+                            PsiClassType valueClassType = (PsiClassType) valueType;
+                            PsiClass keyClass = keyClassType.resolve();
+                            PsiClass valueClass = valueClassType.resolve();
+                            if (keyClass != null && valueClass != null && !isJavaLangType(keyClass) && !isJavaLangType(valueClass)) {
+                                propSchema.fluentPut("type", "object");
+                                JSONObject additionalProperties = new JSONObject();
+                                additionalProperties.fluentPut("$ref", "#/definitions/" + valueClass.getQualifiedName());
+                                propSchema.fluentPut("additionalProperties", additionalProperties);
+                            } else {
+                                propSchema.fluentPut("type", "object");
+                                JSONObject additionalProperties = new JSONObject();
+                                additionalProperties.fluentPut("type", getJsonType(valueType));
+                                propSchema.fluentPut("additionalProperties", additionalProperties);
+                            }
+                        }
+                    }
+                }
+            }
+
             // 处理注释
             PsiDocComment docComment = field.getDocComment();
             if (docComment != null) {
@@ -138,6 +204,7 @@ public class GenerateJsonSchemaAction extends AnAction {
         schema.fluentPut("properties", properties);
         return schema;
     }
+
 
     private JSONObject processType(PsiType type, Set<String> processed, Project project) {
         if (type instanceof PsiClassType) {
@@ -169,8 +236,29 @@ public class GenerateJsonSchemaAction extends AnAction {
         if (psiType instanceof PsiArrayType) {
             return "array";
         }
+        if (psiType instanceof PsiClassType) {
+            PsiClassType classType = (PsiClassType) psiType;
+            PsiClass psiClass = classType.resolve();
+            if (psiClass != null) {
+                String qualifiedName = psiClass.getQualifiedName();
+                if ("java.util.List".equals(qualifiedName) || "java.util.Set".equals(qualifiedName)) {
+                    return "array";
+                } else if ("java.util.Map".equals(qualifiedName)) {
+                    return "object";
+                } else if ("java.util.Date".equals(qualifiedName) || "java.util.Calendar".equals(qualifiedName)) {
+                    return "string"; // 可以进一步细化为 "format": "date-time"
+                } else if (qualifiedName != null && qualifiedName.startsWith("java.time.")) {
+                    return "string"; // 可以进一步细化为 "format": "date-time" 或 "format": "date"
+                } else if ("java.math.BigDecimal".equals(qualifiedName) || "java.math.BigInteger".equals(qualifiedName)) {
+                    return "number";
+                } else {
+                    return "object";
+                }
+            }
+        }
         return "object";
     }
+
 
     private boolean isJavaLangType(PsiClass psiClass) {
         String qualifiedName = psiClass.getQualifiedName();
